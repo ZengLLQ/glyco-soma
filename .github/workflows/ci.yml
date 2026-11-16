@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }} - ${{ matrix.rust }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        rust: [stable, beta]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+          components: clippy, rustfmt
+
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ matrix.rust }}-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ matrix.rust }}-
+
+      - name: Check formatting (Ubuntu only)
+        if: matrix.os == 'ubuntu-latest' && matrix.rust == 'stable'
+        run: cargo fmt --check
+
+      - name: Clippy linter
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Build tests and binaries
+        run: cargo build --all-targets
+
+      - name: Run test suite
+        run: cargo test --verbose
+
+      - name: Run examples
+        run: |
+          cargo run --example 01_virtual_patient_day
+          cargo run --example 02_controller_comparison
+          cargo run --example 03_clinical_cohort_trial
+
+      - name: Verify CLI demo
+        run: cargo run -- demo
